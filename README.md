@@ -1,2 +1,2 @@
 # console
-A tool thats shitty, but i'll still make it.
+A tool thats shitty, but i'll still create it.
