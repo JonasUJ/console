@@ -1,0 +1,9 @@
+# Description of every command in console.py
+
+- help
+{
+help: Shows this text
+exit: Exits the console
+say: Prints the first argument (e.g. "say "Hello World!"" will print "Hello World!")
+cal: Calculates the first argument (e.g. "cal "4 + 2 * 2" will print "8")
+}
