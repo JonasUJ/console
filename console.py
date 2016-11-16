@@ -6,8 +6,8 @@ DIRECTORY_OF_FILE = sys.argv[0].rstrip(NAME_OF_FILE)
 class Handler:
 
     def __init__(self):
-        self.MAX_CMD_ARGS = 10 # There'll be one less
-        self.COMMAND_PATTERN = re.compile(r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\")?((?(quote%s)[a-zA-Z0-9_.+*/!#&/()=?~<> -]+|[a-zA-Z0-9_.+*/!#&/()=?~<>-]+))(?(quote%s)"))?' % (x, x, x) for x in range(self.MAX_CMD_ARGS)]))
+        self.MAX_CMD_ARGS = 10 # There'll be one less, since it counts the command as one
+        self.COMMAND_PATTERN = re.compile(r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\")?((?(quote%s)(?:\\"|[a-zA-Z0-9_.+*/!#&/()=?~<> -])+|[a-zA-Z0-9_.+*/!#&/()=?~<>"-]+))(?(quote%s)"))?' % (x, x, x) for x in range(self.MAX_CMD_ARGS)]))
         self.COMMAND_PROMPT = "\n~ "
         self.COMMANDS = {'exit':self.do_exit, 'cal':self.do_cal, 'say':self.do_say, 'help':self.do_help}
 
@@ -33,7 +33,12 @@ class Handler:
 
     def parse_groups(self, groups):
         result = [('cmd', groups[0])]
-        result.extend([('arg%s' % str(int((x / 2))), groups[x]) for x in range(2, self.MAX_CMD_ARGS * 2, 2)])
+        for x in range(2, self.MAX_CMD_ARGS * 2, 2):
+            try:
+                value = groups[x].replace(r'\"', '"')
+            except AttributeError:
+                value = groups[x]
+            result.append(('arg%s' % str(int((x / 2))), value))
         return dict(result)
 
     def main(self):
