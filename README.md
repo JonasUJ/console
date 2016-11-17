@@ -22,7 +22,7 @@ content can stretch over multiple lines, it starts with { (start curly bracer) a
 key-value pair is some text followed by ': ' (colon space) followed by some more text
 
 an example:
-´´´javascript
+```
 file.txt
 
 \# Here i've made a comment
@@ -35,7 +35,7 @@ file.txt
 foo: bar
 hello: world
 \}
-´´´
+```
 would return:
 \{'header': {'key': 'value'}, 'another header':{'foo': 'bar', 'hello': 'world'}}
 
