@@ -1,4 +1,4 @@
-thcm# console
+# console
 A tool thats shitty and buggy, but i'll still create it.
 
 command syntax = CMD ARG1 "ARG 2" "ARG \"3\""
