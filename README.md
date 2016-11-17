@@ -23,8 +23,6 @@ key-value pair is some text followed by ': ' (colon space) followed by some more
 
 an example:
 ```
-file.txt
-
 \# Here i've made a comment
 
 \- header
@@ -37,5 +35,5 @@ hello: world
 \}
 ```
 would return:
-\{'header': {'key': 'value'}, 'another header':{'foo': 'bar', 'hello': 'world'}}
+`{'header': {'key': 'value'}, 'another header':{'foo': 'bar', 'hello': 'world'}}`
 
