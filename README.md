@@ -16,10 +16,10 @@ fp's purpose is only to read files, it therefore can't write them and you'll hav
 fp.parse_file(filepath) returns a dict with headers as keys and values as a dict of contents corrosponding to the header.
 
 the syntax:
-lines that start with # are comments
-lines that start with '- ' (dash space) are headers, these lines must be followed be content
-content can stretch over multiple lines, it starts with { (start curly bracer) and then it reads the following lines as key-value pairs, until it sees a } (end curly bracer)
-key-value pair is some text followed by ': ' (colon space) followed by some more text
+* lines that start with # are comments
+* lines that start with '- ' (dash space) are headers, these lines must be followed be content
+* content can stretch over multiple lines, it starts with { (start curly bracer) and then it reads the following lines as key-value pairs, until it sees a } (end curly bracer)
+* key-value pair is some text followed by ': ' (colon space) followed by some more text
 
 an example:
 ```
