@@ -1,4 +1,4 @@
-
+\
 
 
 # console
@@ -37,8 +37,8 @@ file.txt-------------------------------
 \{
 foo: bar
 hello: world
-}
----------------------------------------
+\}
+\---------------------------------------
 
 would return
 \{'header': {'key': 'value'}, 'another header':{'foo': 'bar', 'hello': 'world'}}
