@@ -24,7 +24,7 @@ key-value pair is some text followed by ': ' (colon space) followed by some more
 
 an example:
 
-# Here i've made a comment
+\# Here i've made a comment
 
-- header
+\- header
 
