@@ -23,16 +23,16 @@ key-value pair is some text followed by ': ' (colon space) followed by some more
 
 an example:
 ```
-\# Here i've made a comment
+# Here i've made a comment
 
-\- header
-\{key: value}
+- header
+{key: value}
 
-\- another header
-\{
+- another header
+{
 foo: bar
 hello: world
-\}
+}
 ```
 would return:
 `{'header': {'key': 'value'}, 'another header':{'foo': 'bar', 'hello': 'world'}}`
