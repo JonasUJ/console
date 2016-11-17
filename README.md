@@ -1,7 +1,3 @@
-
-\
-
-
 # console
 A tool thats shitty and buggy, but i'm still creating it.
 
@@ -26,7 +22,7 @@ content can stretch over multiple lines, it starts with { (start curly bracer) a
 key-value pair is some text followed by ': ' (colon space) followed by some more text
 
 an example:
-
+´´´
 file.txt-------------------------------
 
 \# Here i've made a comment
@@ -40,7 +36,7 @@ foo: bar
 hello: world
 \}
 \---------------------------------------
-
+´´´
 would return:
 \{'header': {'key': 'value'}, 'another header':{'foo': 'bar', 'hello': 'world'}}
 
