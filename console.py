@@ -5,15 +5,15 @@ class Handler:
     def __init__(self):
         self.NAME_OF_FILE = os.path.basename(sys.argv[0])
         self.DIRECTORY_OF_FILE = sys.argv[0].rstrip(self.NAME_OF_FILE)
-        self.MAX_CMD_ARGS = 10 # There'll be one less, since it counts the command as one
-        self.COMMAND_PATTERN_UNCOMPILED = r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\")?((?(quote%s)(?:\\"|[a-zA-Z0-9_.+*/!#&/()=?~<> -])+|[a-zA-Z0-9_.+*/!#&/()=?~<>"-]+))(?(quote%s)"))?' % (x, x, x) for x in range(self.MAX_CMD_ARGS)])
+        self.MAX_CMD_ARGS = 2 # There'll be one less, since it counts the command as one
+        self.COMMAND_PATTERN_UNCOMPILED = r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\"|~)?((?(quote%s)(?:\\"|[a-zA-Z0-9_.+*/!#&/()=?~<> -])+|[a-zA-Z0-9_.+*/!#&/()=?~<>"-]+))(?(quote%s)(?P=quote%s)))?' % (x, x, x, x) for x in range(self.MAX_CMD_ARGS)])
         self.COMMAND_PATTERN = re.compile(self.COMMAND_PATTERN_UNCOMPILED)
         self.EMBEDDED_COMMAND_PATTERN = re.compile('~' + self.COMMAND_PATTERN_UNCOMPILED + '~')
         self.COMMAND_PROMPT = "\n~ "
-        self.COMMANDS = {'exit':self.do_exit, 'quit':self.do_exit, 'cal':self.do_cal, 'say':self.do_say, 'help':self.do_help}
+        self.COMMANDS = {'exit': self.do_exit, 'quit': self.do_exit, 'cal': self.do_cal, 'say': self.do_say, 'help': self.do_help, 'py': self.do_py}
 
-    def default(self, restart, error):
-        if restart:
+    def default(self, error, restart):
+        if restart: 
             return (restart, 'Error: ' + str(error))
         else:
             return 'Error, ' + str(error)
@@ -27,7 +27,7 @@ class Handler:
     
     def do_exit(self, **kwargs):
         sys.exit(1)
-        return "exited (unless you're seeing this')"
+        return 'exited (unless you\'re seeing this)'
 
     def do_say(self, **kwargs):
         return str(kwargs['arg1'])
@@ -37,13 +37,17 @@ class Handler:
             result = eval(kwargs['arg1'])
             return float(result)
         except NameError as e:
-            return self.default(False, e)
+            return self.default(e, False)
         except ZeroDivisionError as e:
-            return self.default(False, e)
+            return self.default(e, False)
         except SyntaxError as e:
-            return self.default(False, 'Invalid syntax')
-        #except TypeError as e:
-        #    return e
+            return self.default('Invalid cal syntax' , False)
+        except TypeError:
+            return kwargs['arg1']
+
+    def do_py(self, **kwargs):
+        os.system('py')
+        return ''
 
     def parse_groups(self, groups):
         result = [('cmd', groups[0])]
@@ -58,25 +62,44 @@ class Handler:
     def handle_inst(self, match):
         try:
             parsed_inst = self.parse_groups(match.groups())
+            #print('after parsed ', parsed_inst)
         except AttributeError:
-            return self.default(True, 'Invalid imbedded command')
-        for i in range(1, len(parsed_inst.values()) - 1):
+            return self.default('Invalid imbedded command', True)
+
+        for i in range(1, len([x for x in parsed_inst.values() if x != None])):
             arg = parsed_inst['arg%s' % i]
-            if arg:
-                if '~' in arg:
-                    match = self.EMBEDDED_COMMAND_PATTERN.search(arg)
-                    selfcall_outcome = self.handle_inst(match)
-                    quote = arg[arg.index('~') - 1] == '"'
-                    try:
-                        parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
-                        parsed_inst['arg%s' % i][match.span()[0] - quote: match.span()[1] + quote] = str(selfcall_outcome).split()
-                        parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
-                    except AttributeError:
-                        return self.default(True, 'Invalid imbedded command')
+
+            if '~' in arg:
+                new_match = self.EMBEDDED_COMMAND_PATTERN.search(arg)
+                if new_match:
+                    selfcall_outcome = self.handle_inst(new_match)
+                    #print('sends off ', new_match)
+                else:
+                    new_match = self.COMMAND_PATTERN.match(arg)
+                    selfcall_outcome = arg
+                try:
+                    parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
+                    parsed_inst['arg%s' % i][new_match.span()[0]: new_match.span()[1]] = list(str(selfcall_outcome))
+                    parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
+                    return parsed_inst['arg%s' % i]
+                except AttributeError:
+                    return self.default('Invalid imbedded command', True)
+            
+            if self.COMMAND_PATTERN.match(parsed_inst['arg%s' % i]) and self.COMMAND_PATTERN.match(parsed_inst['arg%s' % i]).group(1) in self.COMMANDS:
+                #print('command ', self.COMMAND_PATTERN.match(parsed_inst['arg%s' % i]).group(1))
+                #print('got invoked by ', parsed_inst)
+                new_match = self.COMMAND_PATTERN.match(parsed_inst['arg%s' % i])
+                #print('sends off ', new_match)
+                selfcall_outcome = self.handle_inst(new_match)
+                parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
+                parsed_inst['arg%s' % i][new_match.span()[0]: new_match.span()[1]] = list(str(selfcall_outcome))
+                parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])      
+            
         try:
+            #print('before call ', parsed_inst)
             return self.COMMANDS[parsed_inst['cmd']](**parsed_inst)
         except KeyError as e:
-            return self.default('Invalid command', e)
+            return self.default('Invalid command ' + e.__str__(), False)
 
     def main(self):
         while True:
@@ -95,7 +118,9 @@ class Handler:
                 else:
                     print(cmd_outcome)
             else:
-                self.default("match =", match)
+                self.default('match = ' + match.__str__(), False)
+
 console = Handler()
 while True:
     console.main()
+
