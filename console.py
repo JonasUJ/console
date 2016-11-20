@@ -273,4 +273,3 @@ try:
 except IndexError:
     console = Handler()
     console.main()
-
