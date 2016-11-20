@@ -3,8 +3,8 @@ from ber2 import dictdb
 
 class Handler:
 
-    def __init__(self):
-        self.NAME_OF_FILE = os.path.basename(sys.argv[0])
+    def __init__(self, path):
+        self.NAME_OF_FILE = os.path.basename(path)
         self.DIRECTORY_OF_FILE = sys.argv[0].rstrip(self.NAME_OF_FILE)
         #self.MAX_CMD_ARGS = 5 # There'll be one less, since it counts the command as one
         #self.COMMAND_PATTERN_UNCOMPILED = r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\")?((?(quote%s)(?:\\"|[a-zA-Z0-9_.+*/!#&/()=?~<>: -])+|[a-zA-Z0-9_.+*/!#&/()=?~<>:"-]+))(?(quote%s)(?P=quote%s)))?' % (x, x, x, x) for x in range(self.MAX_CMD_ARGS)])
@@ -13,26 +13,36 @@ class Handler:
         self.PATH_PATTERN = re.compile(r'^[a-zA-Z]:/(?:[^\\/:*?"<>|\r\n]+/)*[^\\/:*?"<>|\r\n]*$')
         self.COMMAND_PROMPT = "\n:: "
         self.RESERVED_NAMES = []
-        self.RESERVED_MACRO_NAMES = ['create']
+        self.RESERVED_FUNC_NAMES = ['create']
+        self.SAVES_DIRECTORY = self.DIRECTORY_OF_FILE + '/' + self.NAME_OF_FILE + '.saves/'
         self.COMMANDS = {
-            'exit': self.do_exit, 
-            'quit': self.do_exit, 
-            'cal': self.do_cal, 
-            'say': self.do_say, 
-            'help': self.do_help, 
-            'py': self.do_py, 
-            'create': self.do_create, 
-            'set': self.do_set, 
-            'get': self.do_get, 
-            'open': self.do_open,
-            'macro': self.do_macro,
-            'wait': self.do_wait,
-            'int': self.do_int,
-            'ask': self.do_ask,
-            'repeat': self.do_repeat
+            'exit': (self.do_exit), 
+            'quit': (self.do_exit), 
+            'cal': (self.do_cal, True), 
+            'say': (self.do_say, True),
+            'help': (self.do_help),
+            'py': (self.do_py), 
+            'create': (self.do_create, True, True), 
+            'set': (self.do_set, True, True), 
+            'get': (self.do_get, True), 
+            'open': (self.do_open, True),
+            'func': (self.do_func, True, True),
+            'wait': (self.do_wait, True),
+            'int': (self.do_int, True),
+            'ask': (self.do_ask, True),
+            'repeat': (self.do_repeat, True, False)
             }
-        self.save_dict = dictdb(self.DIRECTORY_OF_FILE + 'save.txt')
-        self.macros = dictdb(self.DIRECTORY_OF_FILE + 'macros.txt')
+        if not os.path.exists(self.SAVES_DIRECTORY + 'save.txt'):
+            with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
+                pass
+        self.cross_vars = dictdb(self.SAVES_DIRECTORY + 'save.txt')
+        self.vars = {}
+        if not os.path.exists(self.SAVES_DIRECTORY + 'funcs.txt'):
+            with open(self.SAVES_DIRECTORY + 'funcs.txt', 'w'):
+                pass
+        self.funcs = dictdb(self.SAVES_DIRECTORY + 'funcs.txt')
+        if not os.path.exists(self.SAVES_DIRECTORY):
+            os.makedirs(self.SAVES_DIRECTORY)
 
     def default(self, error):
         #if restart: 
@@ -48,7 +58,7 @@ class Handler:
         return ''
     
     def do_exit(self, **kwargs):
-        self.save_dict.save()
+        self.cross_vars.save()
         sys.exit(1)
         return 'exited (unless you\'re seeing this)'
 
@@ -85,7 +95,7 @@ class Handler:
                     return ''
 
             elif len(kwargs) <= 2:            
-                with open(self.save_dict['standard_dir'] + kwargs['arg1'], 'w') as f:
+                with open(self.cross_vars['standard_dir'] + kwargs['arg1'], 'w') as f:
                     return ''
 
             elif self.PATH_PATTERN.match(kwargs['arg2']):
@@ -98,17 +108,21 @@ class Handler:
             return 'Couldn\'t create ' + kwargs['arg1']
 
     def do_set(self, **kwargs):
-        if kwargs['arg1'] not in self.RESERVED_NAMES:
-            self.save_dict[kwargs['arg1']] = kwargs['arg2']
-            self.save_dict.save()
-            print('set', kwargs['arg1'], kwargs['arg2'])
+        if kwargs['arg1'] not in self.RESERVED_NAMES and kwargs['arg1'] not in self.cross_vars:
+            self.vars[kwargs['arg1']] = kwargs['arg2']
             return ''
+        elif kwargs['arg1'] in self.cross_vars:
+            self.cross_vars[kwargs['arg1']] = kwargs['arg2']
+            self.cross_vars.save()
         else:
             return '\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed'
 
     def do_get(self, **kwargs):
         try:
-            return self.save_dict[kwargs['arg1']]
+            if kwargs['arg1'] in self.cross_vars:
+                return self.cross_vars[kwargs['arg1']]
+            else:
+                return self.vars[kwargs['arg1']]
         except KeyError as e:
             return 'Couldn\'t find ' + e.__str__()
 
@@ -118,7 +132,7 @@ class Handler:
                 os.startfile(kwargs['arg1'])
                 return ''
             else:
-                os.startfile(self.save_dict['standard_dir'] + kwargs['arg1'])
+                os.startfile(self.cross_vars['standard_dir'] + kwargs['arg1'])
                 return ''
         except FileNotFoundError:
             return self.default('Couldn\'t find ' + kwargs['arg1'])
@@ -132,14 +146,14 @@ class Handler:
         except OverflowError:
             return self.default('Can\'t wait that long')
 
-    def do_macro(self, **kwargs):
+    def do_func(self, **kwargs):
         try:
             if kwargs['arg1'] == 'create':
-                if kwargs['arg2'] not in self.RESERVED_MACRO_NAMES:
+                if kwargs['arg2'] not in self.RESERVED_FUNC_NAMES:
                     try:
-                        with open(self.DIRECTORY_OF_FILE + kwargs['arg2'] + '.cpy', 'w') as f:
-                            self.macros[kwargs['arg2']] = self.DIRECTORY_OF_FILE + kwargs['arg2'] + '.cpy'
-                            self.macros.save()
+                        with open(self.SAVES_DIRECTORY + kwargs['arg2'] + '.cpy', 'w') as f:
+                            self.funcs[kwargs['arg2']] = self.DIRECTORY_OF_FILE + kwargs['arg2'] + '.cpy'
+                            self.funcs.save()
                             inst = ''
                             while inst != 'end\n':
                                 inst = input(kwargs['arg2'] + '> ') + '\n'
@@ -150,14 +164,14 @@ class Handler:
                     except FileNotFoundError:
                         return self.default('\'%s\' is an invalid name' % kwargs['arg2'])
                 else:
-                    return self.default('Macro name can\'t be \'%s\'' % kwargs['arg1'])
-            elif kwargs['arg1'] in self.macros:
-                return self.handle_cpy_file(self.macros[kwargs['arg1']])
+                    return self.default('Func name can\'t be \'%s\'' % kwargs['arg1'])
+            elif kwargs['arg1'] in self.funcs:
+                return self.handle_cpy_file(self.funcs[kwargs['arg1']])
             else:
-                return self.default('No macro named \'%s\'' % kwargs['arg1'])
+                return self.default('No func named \'%s\'' % kwargs['arg1'])
 
-        except KeyError:
-            return self.default('Not enough \'macro\' input')
+        except KeyError as e:
+            return self.default('Not enough \'func\' input')
             
 
     def do_int(self, **kwargs):
@@ -173,9 +187,7 @@ class Handler:
         try:
             arg = copy.deepcopy(kwargs['arg2'])
             for i in range(int(kwargs['arg1'])):               
-                print(kwargs)
                 print(self.handle_inst(arg))
-                print(arg)
             return ''
         except KeyError:
             return self.default('Not enough \'repeat\' input')
@@ -185,9 +197,16 @@ class Handler:
     def handle_cpy_file(self, cpy_file):
         with open(cpy_file, 'r') as cpy:
             for inst in cpy.readlines():
-                print(inst)
-                print(self.handle_inst(inst.strip('\n')))
+                if inst != '\n':
+                    print(self.handle_inst(inst.strip('\n')))
         return ''
+    
+    def validate_cmd(self, cmd):
+        for tup in self.COMMANDS:
+            if tup[0] == cmd:
+                return True
+        else:
+            return False
 
     def find_embed(self, inst):
         inst += ' '
@@ -239,11 +258,10 @@ class Handler:
     def handle_inst(self, inst):
         parsed_inst = self.parse_inst(inst)
         #print(parsed_inst)
-        if parsed_inst['cmd'] not in self.COMMANDS:
+        if self.validate_cmd(parsed_inst['cmd']):
             return self.default('Invalid command \'%s\'' % parsed_inst['cmd'])
-
         for i in range(1, len(parsed_inst.values())):
-            if '<' in parsed_inst['arg%s' % i]:
+            if '<' in parsed_inst['arg%s' % i] and self.COMMANDS[parsed_inst['cmd']][i]:
                 embed = self.find_embed(parsed_inst['arg%s' % i])
                 for tup in reversed(embed):
                     #print(tup)
@@ -254,22 +272,23 @@ class Handler:
                     parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
         try:
             #print(parsed_inst)
-            return self.COMMANDS[parsed_inst['cmd']](**parsed_inst)
+            return self.COMMANDS[parsed_inst['cmd']][0](**parsed_inst)
         except KeyError as e:
             return self.default('Invalid command ' + e.__str__())
 
     def main(self):
         while True:
             instruction = input(self.COMMAND_PROMPT)
-            cmd_outcome = self.handle_inst(instruction)
-            if cmd_outcome:
-                print(cmd_outcome)
+            if instruction:
+                cmd_outcome = self.handle_inst(instruction)
+                if cmd_outcome:
+                    print(cmd_outcome)
 
 try:
     os.system('cls')
-    handler = Handler()
+    handler = Handler(sys.argv[1])
     handler.handle_cpy_file(sys.argv[1])
     input()
 except IndexError:
-    console = Handler()
+    console = Handler(sys.argv[0])
     console.main()
