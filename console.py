@@ -1,3 +1,6 @@
+#TODO additions: func args, lists, bools, conditions, if/else, imports, 
+#TODO checks: check every error and improve return, 
+
 import re, sys, os, fp, time, copy
 from ber2 import dictdb
 
@@ -18,12 +21,12 @@ class Handler:
         if not os.path.exists(self.SAVES_DIRECTORY):
             os.makedirs(self.SAVES_DIRECTORY)
         self.COMMANDS = {
-            'exit': (self.do_exit), 
-            'quit': (self.do_exit), 
+            'exit': (self.do_exit,), 
+            'quit': (self.do_exit,), 
             'cal': (self.do_cal, True), 
             'say': (self.do_say, True),
-            'help': (self.do_help),
-            'py': (self.do_py), 
+            'help': (self.do_help,),
+            'py': (self.do_py,), 
             'create': (self.do_create, True, True), 
             'set': (self.do_set, True, True), 
             'get': (self.do_get, True), 
@@ -64,7 +67,8 @@ class Handler:
 
     def do_say(self, **kwargs):
         try:
-            return str(kwargs['arg1'])
+            print(str(kwargs['arg1']))
+            return ''
         except KeyError:
             return self.default('Not enough input to say')
  
@@ -108,23 +112,47 @@ class Handler:
             return 'Couldn\'t create ' + kwargs['arg1']
 
     def do_set(self, **kwargs):
-        if kwargs['arg1'] not in self.RESERVED_NAMES and kwargs['arg1'] not in self.cross_vars:
-            self.vars[kwargs['arg1']] = kwargs['arg2']
-            return ''
-        elif kwargs['arg1'] in self.cross_vars:
-            self.cross_vars[kwargs['arg1']] = kwargs['arg2']
-            self.cross_vars.save()
-        else:
-            return '\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed'
+        try:
+            if kwargs['arg1'] in self.cross_vars:
+                self.cross_vars[kwargs['arg1']] = kwargs['arg2']
+                self.cross_vars.save()
+                return ''
+            elif kwargs['arg1'] not in self.RESERVED_NAMES and ';' in kwargs['arg2'] and len(kwargs) == 3:
+                self.vars[kwargs['arg1']] = ['list', kwargs['arg2'].split(';')]
+                return ''
+            elif kwargs['arg1'] not in self.RESERVED_NAMES  and len(kwargs) == 3:
+                self.vars[kwargs['arg1']] = ['var', kwargs['arg2']]
+                return ''  
+            elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 4:
+                try:
+                    self.vars[kwargs['arg1']][1][int(kwargs['arg2'])] = kwargs['arg3']
+                    return ''
+                except IndexError as e:
+                    return self.default(e.__str__())  
+            else:
+                return self.default('\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed')
+        except KeyError:
+            return self.default('Not enough input to \'set\'')
 
     def do_get(self, **kwargs):
         try:
             if kwargs['arg1'] in self.cross_vars:
                 return self.cross_vars[kwargs['arg1']]
             else:
-                return self.vars[kwargs['arg1']]
+                if self.vars[kwargs['arg1']][0] == 'var':
+                    return self.vars[kwargs['arg1']][1]
+                elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 3:
+                    try:
+                        return self.vars[kwargs['arg1']][1][int(kwargs['arg2'])]
+                    except IndexError as e:
+                        return self.default(e.__str__())
+                    except ValueError:
+                        return self.default('Can\'t get index \'%s\' of \'%s\'' % (kwargs['arg2'], kwargs['arg1']))
+                elif self.vars[kwargs['arg1']][0] == 'list':
+                    return ';'.join(self.vars[kwargs['arg1']][1])
+                    
         except KeyError as e:
-            return 'Couldn\'t find ' + e.__str__()
+            return self.default('Couldn\'t find ' + e.__str__())
 
     def do_open(self, **kwargs):
         try:
@@ -152,7 +180,7 @@ class Handler:
                 if kwargs['arg2'] not in self.RESERVED_FUNC_NAMES:
                     try:
                         with open(self.SAVES_DIRECTORY + kwargs['arg2'] + '.cpy', 'w') as f:
-                            self.funcs[kwargs['arg2']] = self.DIRECTORY_OF_FILE + kwargs['arg2'] + '.cpy'
+                            self.funcs[kwargs['arg2']] = self.SAVES_DIRECTORY + kwargs['arg2'] + '.cpy'
                             self.funcs.save()
                             inst = ''
                             while inst != 'end\n':
@@ -185,11 +213,10 @@ class Handler:
 
     def do_repeat(self, **kwargs):
         try:
-            arg = copy.deepcopy(kwargs['arg2'])
-            for i in range(int(kwargs['arg1'])):               
-                print(self.handle_inst(arg))
+            for i in range(int(float(kwargs['arg1']))):               
+                print(self.handle_inst(kwargs['arg2']))
             return ''
-        except KeyError:
+        except KeyError as e:
             return self.default('Not enough \'repeat\' input')
         except ValueError:
             return self.default('Can\'t repeat \'%s\' times' % kwargs['arg1'])
@@ -249,7 +276,8 @@ class Handler:
             elif parse_inst[i] == ' ' and quote == 0 and embeds == 0:
                 token = token.lstrip(' ').replace(r'\"', '"')
                 token = token[1:len(token)-1] if token.startswith('"') and token.endswith('"') else token
-                result['arg%s' % cur_arg] = token
+                if token:
+                    result['arg%s' % cur_arg] = token
                 cur_arg += 1
                 token = ''
             token += parse_inst[i]
@@ -286,8 +314,8 @@ class Handler:
 
 try:
     os.system('cls')
-    handler = Handler(sys.argv[1])#r'C:\Users\jonas\OneDrive\Dokumenter\GitHub\console\fakerer.cpy')
-    handler.handle_cpy_file(sys.argv[1])#r'C:\Users\jonas\OneDrive\Dokumenter\GitHub\console\fakerer.cpy')
+    handler = Handler(sys.argv[1])
+    handler.handle_cpy_file(sys.argv[1])
     input()
 except IndexError:
     console = Handler(sys.argv[0])
