@@ -5,7 +5,7 @@ class Handler:
 
     def __init__(self, path):
         self.NAME_OF_FILE = os.path.basename(path)
-        self.DIRECTORY_OF_FILE = sys.argv[0].rstrip(self.NAME_OF_FILE)
+        self.DIRECTORY_OF_FILE = path.rstrip(self.NAME_OF_FILE)
         #self.MAX_CMD_ARGS = 5 # There'll be one less, since it counts the command as one
         #self.COMMAND_PATTERN_UNCOMPILED = r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\")?((?(quote%s)(?:\\"|[a-zA-Z0-9_.+*/!#&/()=?~<>: -])+|[a-zA-Z0-9_.+*/!#&/()=?~<>:"-]+))(?(quote%s)(?P=quote%s)))?' % (x, x, x, x) for x in range(self.MAX_CMD_ARGS)])
         #self.COMMAND_PATTERN = re.compile(self.COMMAND_PATTERN_UNCOMPILED) # I don't know why I keep this, it isn't used
@@ -15,6 +15,8 @@ class Handler:
         self.RESERVED_NAMES = []
         self.RESERVED_FUNC_NAMES = ['create']
         self.SAVES_DIRECTORY = self.DIRECTORY_OF_FILE + '/' + self.NAME_OF_FILE + '.saves/'
+        if not os.path.exists(self.SAVES_DIRECTORY):
+            os.makedirs(self.SAVES_DIRECTORY)
         self.COMMANDS = {
             'exit': (self.do_exit), 
             'quit': (self.do_exit), 
@@ -41,8 +43,6 @@ class Handler:
             with open(self.SAVES_DIRECTORY + 'funcs.txt', 'w'):
                 pass
         self.funcs = dictdb(self.SAVES_DIRECTORY + 'funcs.txt')
-        if not os.path.exists(self.SAVES_DIRECTORY):
-            os.makedirs(self.SAVES_DIRECTORY)
 
     def default(self, error):
         #if restart: 
@@ -286,8 +286,8 @@ class Handler:
 
 try:
     os.system('cls')
-    handler = Handler(sys.argv[1])
-    handler.handle_cpy_file(sys.argv[1])
+    handler = Handler(sys.argv[1])#r'C:\Users\jonas\OneDrive\Dokumenter\GitHub\console\fakerer.cpy')
+    handler.handle_cpy_file(sys.argv[1])#r'C:\Users\jonas\OneDrive\Dokumenter\GitHub\console\fakerer.cpy')
     input()
 except IndexError:
     console = Handler(sys.argv[0])

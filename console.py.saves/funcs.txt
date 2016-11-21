@@ -1,1 +1,0 @@
-{#}f1{|}c:/Users/jonas/OneDrive/Dokumenter/GitHub/console/f1.cpy{#}{#}f2{|}C:\Users\jonas\OneDrive\Dokumenter\GitHub\console\f2.cpy{#}{#}foo{|}C:\Users\jonas\OneDrive\Dokumenter\GitHub\console\foo.cpy{#}{#}test{|}c:/Users/jonas/OneDrive/Dokumenter/GitHub/console/test.cpy{#}{#}repeat{|}c:/Users/jonas/OneDrive/Dokumenter/GitHub/console/repeat.cpy{#}
