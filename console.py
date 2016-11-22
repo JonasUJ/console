@@ -1,5 +1,5 @@
 #TODO additions: func args, bools, conditions, if/else, imports, 
-#TODO checks: check every error and improve return (what's currently being handled), 
+#TODO checks: check every error and improve return, 
 
 import re, sys, os, time, copy
 from ber2 import dictdb
@@ -59,8 +59,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
             'help': (self.do_help,),
             'py': (self.do_py,), 
             'create': (self.do_create, True, True), 
-            'set': (self.do_set, True, True), 
-            'get': (self.do_get, True), 
+            'set': (self.do_set, True, True, True), 
+            'get': (self.do_get, True, True), 
             'open': (self.do_open, True),
             'func': (self.do_func, True, True),
             'wait': (self.do_wait, True),
@@ -83,7 +83,9 @@ ask - Prints the first argument and pauses the script until the user presses ent
         self.funcs = dictdb(self.SAVES_DIRECTORY + 'funcs.txt')
 
     def default(self, error):
-        return 'Error, %s\n%s' % (str(error), self.CURRENTLY_HANDELING)
+        to_return = 'Error, %s\nError occurred here: %s' % (str(error), self.CURRENTLY_HANDELING.strip(' '))
+        self.CURRENTLY_HANDELING = ''
+        return to_return
 
     def do_help(self, **kwargs):
         return self.HELP
@@ -152,19 +154,26 @@ ask - Prints the first argument and pauses the script until the user presses ent
             elif kwargs['arg1'] not in self.RESERVED_NAMES and ';' in kwargs['arg2'] and len(kwargs) == 3:
                 self.vars[kwargs['arg1']] = ['list', kwargs['arg2'].split(';')]
                 return ''
-            elif kwargs['arg1'] not in self.RESERVED_NAMES  and len(kwargs) == 3:
+            elif kwargs['arg1'] not in self.RESERVED_NAMES and len(kwargs) == 3:
                 self.vars[kwargs['arg1']] = ['var', kwargs['arg2']]
                 return ''  
-            elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 4:
+            elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) == 4:
                 try:
                     self.vars[kwargs['arg1']][1][int(kwargs['arg2'])] = kwargs['arg3']
                     return ''
                 except IndexError as e:
                     return self.default(e.__str__())  
+                except KeyError as e:
+                    return self.default(e.__str__())
+                except ValueError:
+                    return self.default('\'%s\' is an invalid index' % kwargs['arg2'])
             else:
-                return self.default('\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed')
+                if kwargs['arg1'] in self.RESERVED_NAMES:
+                    return self.default('\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed')
+                else:
+                    return self.default('Couldn\'t do \'set\' with current input')
         except KeyError:
-            return self.default('Not enough input to \'set\'')
+            return self.default('Not enough or too much input to \'set\'')
 
     def do_get(self, **kwargs):
         try:
@@ -328,10 +337,14 @@ ask - Prints the first argument and pauses the script until the user presses ent
                     new_inst = tup[0][1:len(tup[0])-1] if tup[0].startswith('<') and tup[0].endswith('>') else tup[0][1:] if tup[0].startswith('<') else tup[0][:len(tup[0])-1]
                     self.CURRENTLY_HANDELING = new_inst
                     selfcall_outcome = self.handle_inst(new_inst)
-                    parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
-                    parsed_inst['arg%s' % i][tup[1]: tup[2]] = list(str(selfcall_outcome))
-                    parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
+                    if not selfcall_outcome.startswith('Error'):
+                        parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
+                        parsed_inst['arg%s' % i][tup[1]: tup[2]] = list(str(selfcall_outcome))
+                        parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
+                    else:
+                        return selfcall_outcome
         try:
+            self.CURRENTLY_HANDELING = ''
             for i in range(len(parsed_inst)):
                 self.CURRENTLY_HANDELING += ' ' + parsed_inst['arg%s' % i] if i else parsed_inst['cmd']
             return self.COMMANDS[parsed_inst['cmd']][0](**parsed_inst)
