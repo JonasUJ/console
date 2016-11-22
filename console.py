@@ -1,25 +1,56 @@
-#TODO additions: func args, lists, bools, conditions, if/else, imports, 
-#TODO checks: check every error and improve return, 
+#TODO additions: func args, bools, conditions, if/else, imports, 
+#TODO checks: check every error and improve return (what's currently being handled), 
 
-import re, sys, os, fp, time, copy
+import re, sys, os, time, copy
 from ber2 import dictdb
 
 class Handler:
 
     def __init__(self, path):
+        self.HELP = '''
+help - Shows this text
+
+exit or quit - Terminates the script
+
+say - Prints the first argument
+e.g "say "Hello World!"" will print "Hello World!"
+"
+cal - Calculates the first argument
+e.g "cal "4 + 2 * 2" will print "8"
+
+set - Sets a keyword to reference a value
+e.g "set kw v" will set "kw" to "v"
+
+get - Gets the value of a keyword
+e.g "get kw" will get the value og "kw"
+
+create - Creates a file at the given path. Can be done in three different ways:
+"create file.txt c:/" creates file.txt at c:/
+"create c:/file.txt" does the same as above
+"create file.txt" creates file.txt at standard_dir which is set with "set standard_dir dir"
+
+open - Opens a file at the given path, if only the filename is given, it will try to look for the file in standard_dir
+e.g "open file.txt" will open file.txt for editing
+
+py - Enters the python interpeter
+
+wait - Stops the script for x seconds
+
+int - turns any decimal number into a whole number
+e.g "int 2.0" will return "2" and "int 2.9563" will return "2"
+
+ask - Prints the first argument and pauses the script until the user presses enter. Return whatever the user wrote
+        '''
         self.NAME_OF_FILE = os.path.basename(path)
         self.DIRECTORY_OF_FILE = path.rstrip(self.NAME_OF_FILE)
-        #self.MAX_CMD_ARGS = 5 # There'll be one less, since it counts the command as one
-        #self.COMMAND_PATTERN_UNCOMPILED = r'([a-zA-Z]+)' + r''.join([r'(?: (?P<quote%s>\")?((?(quote%s)(?:\\"|[a-zA-Z0-9_.+*/!#&/()=?~<>: -])+|[a-zA-Z0-9_.+*/!#&/()=?~<>:"-]+))(?(quote%s)(?P=quote%s)))?' % (x, x, x, x) for x in range(self.MAX_CMD_ARGS)])
-        #self.COMMAND_PATTERN = re.compile(self.COMMAND_PATTERN_UNCOMPILED) # I don't know why I keep this, it isn't used
-        #self.EMBEDDED_COMMAND_PATTERN = re.compile('<' + self.COMMAND_PATTERN_UNCOMPILED + '>')
         self.PATH_PATTERN = re.compile(r'^[a-zA-Z]:/(?:[^\\/:*?"<>|\r\n]+/)*[^\\/:*?"<>|\r\n]*$')
         self.COMMAND_PROMPT = "\n:: "
-        self.RESERVED_NAMES = []
+        self.RESERVED_NAMES = ['args']
         self.RESERVED_FUNC_NAMES = ['create']
         self.SAVES_DIRECTORY = self.DIRECTORY_OF_FILE + '/' + self.NAME_OF_FILE + '.saves/'
         if not os.path.exists(self.SAVES_DIRECTORY):
             os.makedirs(self.SAVES_DIRECTORY)
+        self.CURRENTLY_HANDELING = ''
         self.COMMANDS = {
             'exit': (self.do_exit,), 
             'quit': (self.do_exit,), 
@@ -41,6 +72,10 @@ class Handler:
             with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
                 pass
         self.cross_vars = dictdb(self.SAVES_DIRECTORY + 'save.txt')
+        self.cross_vars_names = ['standard_dir']
+        for var_name in self.cross_vars_names:
+            if var_name not in self.cross_vars:
+                self.cross_vars[var_name] = ''
         self.vars = {}
         if not os.path.exists(self.SAVES_DIRECTORY + 'funcs.txt'):
             with open(self.SAVES_DIRECTORY + 'funcs.txt', 'w'):
@@ -48,17 +83,10 @@ class Handler:
         self.funcs = dictdb(self.SAVES_DIRECTORY + 'funcs.txt')
 
     def default(self, error):
-        #if restart: 
-        #   return (restart, 'Error: ' + str(error))
-        #else:
-        return 'Error, ' + str(error)
+        return 'Error, %s\n%s' % (str(error), self.CURRENTLY_HANDELING)
 
     def do_help(self, **kwargs):
-        help_dict = fp.parse_file(self.DIRECTORY_OF_FILE + 'consolepyhelp.fp')
-        sorted_keys = sorted(list(help_dict['help'].keys()))
-        for cmd in sorted_keys:
-           print('%s - %s' % (cmd, help_dict['help'][cmd]))
-        return ''
+        return self.HELP
     
     def do_exit(self, **kwargs):
         self.cross_vars.save()
@@ -70,7 +98,9 @@ class Handler:
             print(str(kwargs['arg1']))
             return ''
         except KeyError:
-            return self.default('Not enough input to say')
+            return self.default('Not enough input to \'say\'')
+        except ValueError:
+            return self.default('Can\'t say that')
  
     def do_cal(self, **kwargs):
         try:
@@ -88,13 +118,13 @@ class Handler:
             return self.default('Not enough \'cal\' input')
 
     def do_py(self, **kwargs):
-        os.system('py')
+        os.system('python')
         return ''
     
     def do_create(self, **kwargs):
         try:
 
-            if self.PATH_PATTERN.match(kwargs['arg1']):            
+            if self.PATH_PATTERN.match(kwargs['arg1']) and len(kwargs) == 2:            
                 with open(kwargs['arg1'], 'w') as f:
                     return ''
 
@@ -102,18 +132,20 @@ class Handler:
                 with open(self.cross_vars['standard_dir'] + kwargs['arg1'], 'w') as f:
                     return ''
 
-            elif self.PATH_PATTERN.match(kwargs['arg2']):
+            elif self.PATH_PATTERN.match(kwargs['arg2']) and len(kwargs) >= 3:
                 with open(kwargs['arg2'] + kwargs['arg1'], 'w') as f:
                     return ''
                 
-        except KeyError:
-            return self.default('Not enough \'create\' input')
+            else:
+                return self.default('Not enough \'create\' input')
         except PermissionError:        
-            return 'Couldn\'t create ' + kwargs['arg1']
+            return self.default('Couldn\'t create ' + kwargs['arg1'])
+        except FileNotFoundError as e:
+            return self.default(e.__str__())
 
     def do_set(self, **kwargs):
         try:
-            if kwargs['arg1'] in self.cross_vars:
+            if kwargs['arg1'] in self.cross_vars and len(kwargs) == 3:
                 self.cross_vars[kwargs['arg1']] = kwargs['arg2']
                 self.cross_vars.save()
                 return ''
@@ -136,7 +168,7 @@ class Handler:
 
     def do_get(self, **kwargs):
         try:
-            if kwargs['arg1'] in self.cross_vars:
+            if kwargs['arg1'] in self.cross_vars and len(kwargs) == 2:
                 return self.cross_vars[kwargs['arg1']]
             else:
                 if self.vars[kwargs['arg1']][0] == 'var':
@@ -213,7 +245,8 @@ class Handler:
 
     def do_repeat(self, **kwargs):
         try:
-            for i in range(int(float(kwargs['arg1']))):               
+            for i in range(int(float(kwargs['arg1']))):
+                self.CURRENTLY_HANDELING = kwargs               
                 print(self.handle_inst(kwargs['arg2']))
             return ''
         except KeyError as e:
@@ -225,6 +258,7 @@ class Handler:
         with open(cpy_file, 'r') as cpy:
             for inst in cpy.readlines():
                 if inst != '\n':
+                    self.CURRENTLY_HANDELING = inst
                     print(self.handle_inst(inst.strip('\n')))
         return ''
     
@@ -285,21 +319,21 @@ class Handler:
 
     def handle_inst(self, inst):
         parsed_inst = self.parse_inst(inst)
-        #print(parsed_inst)
         if self.validate_cmd(parsed_inst['cmd']):
             return self.default('Invalid command \'%s\'' % parsed_inst['cmd'])
         for i in range(1, len(parsed_inst.values())):
             if '<' in parsed_inst['arg%s' % i] and self.COMMANDS[parsed_inst['cmd']][i]:
                 embed = self.find_embed(parsed_inst['arg%s' % i])
                 for tup in reversed(embed):
-                    #print(tup)
                     new_inst = tup[0][1:len(tup[0])-1] if tup[0].startswith('<') and tup[0].endswith('>') else tup[0][1:] if tup[0].startswith('<') else tup[0][:len(tup[0])-1]
+                    self.CURRENTLY_HANDELING = new_inst
                     selfcall_outcome = self.handle_inst(new_inst)
                     parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
                     parsed_inst['arg%s' % i][tup[1]: tup[2]] = list(str(selfcall_outcome))
                     parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
         try:
-            #print(parsed_inst)
+            for i in range(len(parsed_inst)):
+                self.CURRENTLY_HANDELING += ' ' + parsed_inst['arg%s' % i] if i else parsed_inst['cmd']
             return self.COMMANDS[parsed_inst['cmd']][0](**parsed_inst)
         except KeyError as e:
             return self.default('Invalid command ' + e.__str__())
