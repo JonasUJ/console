@@ -1,12 +1,18 @@
-#TODO additions: func args, bools, conditions, if/else, imports, 
-#TODO checks: check every error and improve return, 
+#TODO additions: bools, conditions, if/else, imports, 
+#TODO checks: 
 
-import re, sys, os, time, copy
+import copy
+import os
+import re
+import sys
+import time
+
 from ber2 import dictdb
+
 
 class Handler:
 
-    def __init__(self, path):
+    def __init__(self, path, shell):
         self.HELP = '''
 help - Shows this text
 
@@ -41,6 +47,7 @@ e.g "int 2.0" will return "2" and "int 2.9563" will return "2"
 
 ask - Prints the first argument and pauses the script until the user presses enter. Return whatever the user wrote
         '''
+        self.SHELL = shell
         self.NAME_OF_FILE = os.path.basename(path)
         self.DIRECTORY_OF_FILE = path.rstrip(self.NAME_OF_FILE)
         self.PATH_PATTERN = re.compile(r'^[a-zA-Z]:/(?:[^\\/:*?"<>|\r\n]+/)*[^\\/:*?"<>|\r\n]*$')
@@ -51,6 +58,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
         if not os.path.exists(self.SAVES_DIRECTORY):
             os.makedirs(self.SAVES_DIRECTORY)
         self.CURRENTLY_HANDELING = ''
+        self.LINE_NUM = 1
+        self.running_func = False
         self.COMMANDS = {
             'exit': (self.do_exit,), 
             'quit': (self.do_exit,), 
@@ -66,7 +75,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
             'wait': (self.do_wait, True),
             'int': (self.do_int, True),
             'ask': (self.do_ask, True),
-            'repeat': (self.do_repeat, True, False)
+            'repeat': (self.do_repeat, True, False),
+            'return': (self.do_return, True)
             }
         if not os.path.exists(self.SAVES_DIRECTORY + 'save.txt'):
             with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
@@ -77,13 +87,16 @@ ask - Prints the first argument and pauses the script until the user presses ent
             if var_name not in self.cross_vars:
                 self.cross_vars[var_name] = ''
         self.vars = {}
+        for var_name in self.RESERVED_NAMES:
+            if var_name not in self.vars:
+                self.vars[var_name] = ['var', '']
         if not os.path.exists(self.SAVES_DIRECTORY + 'funcs.txt'):
             with open(self.SAVES_DIRECTORY + 'funcs.txt', 'w'):
                 pass
         self.funcs = dictdb(self.SAVES_DIRECTORY + 'funcs.txt')
 
     def default(self, error):
-        to_return = 'Error, %s\nError occurred here: %s' % (str(error), self.CURRENTLY_HANDELING.strip(' '))
+        to_return = 'Error occurred on line %s\n\'%s\'\n%s' % (self.LINE_NUM, self.CURRENTLY_HANDELING.strip(' '), str(error))
         self.CURRENTLY_HANDELING = ''
         return to_return
 
@@ -147,53 +160,53 @@ ask - Prints the first argument and pauses the script until the user presses ent
 
     def do_set(self, **kwargs):
         try:
-            if kwargs['arg1'] in self.cross_vars and len(kwargs) == 3:
-                self.cross_vars[kwargs['arg1']] = kwargs['arg2']
-                self.cross_vars.save()
-                return ''
-            elif kwargs['arg1'] not in self.RESERVED_NAMES and ';' in kwargs['arg2'] and len(kwargs) == 3:
-                self.vars[kwargs['arg1']] = ['list', kwargs['arg2'].split(';')]
-                return ''
-            elif kwargs['arg1'] not in self.RESERVED_NAMES and len(kwargs) == 3:
-                self.vars[kwargs['arg1']] = ['var', kwargs['arg2']]
-                return ''  
-            elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) == 4:
-                try:
-                    self.vars[kwargs['arg1']][1][int(kwargs['arg2'])] = kwargs['arg3']
+            if kwargs['arg1'] not in self.RESERVED_NAMES:
+                if kwargs['arg1'] in self.cross_vars and len(kwargs) == 3:
+                    self.cross_vars[kwargs['arg1']] = kwargs['arg2']
+                    self.cross_vars.save()
                     return ''
-                except IndexError as e:
-                    return self.default(e.__str__())  
-                except KeyError as e:
-                    return self.default(e.__str__())
-                except ValueError:
-                    return self.default('\'%s\' is an invalid index' % kwargs['arg2'])
-            else:
-                if kwargs['arg1'] in self.RESERVED_NAMES:
-                    return self.default('\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed')
+                elif kwargs['arg1'] and ';' in kwargs['arg2'] and len(kwargs) == 3:
+                    self.vars[kwargs['arg1']] = ['list', kwargs['arg2'].split(';')]
+                    return ''
+                elif kwargs['arg1'] and len(kwargs) == 3:
+                    self.vars[kwargs['arg1']] = ['var', kwargs['arg2']]
+                    return ''  
+                elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) == 4:
+                    try:
+                        self.vars[kwargs['arg1']][1][int(kwargs['arg2'])] = kwargs['arg3']
+                        return ''
+                    except IndexError as e:
+                        return self.default(e.__str__())  
+                    except KeyError as e:
+                        return self.default(e.__str__())
+                    except ValueError:
+                        return self.default('\'%s\' is an invalid index' % kwargs['arg2'])
                 else:
                     return self.default('Couldn\'t do \'set\' with current input')
-        except KeyError:
+            else:
+                return self.default('\'' + kwargs['arg1'] + '\' is a reserved name and can\'t be changed')
+                    
+        except KeyError as e: 
             return self.default('Not enough or too much input to \'set\'')
 
     def do_get(self, **kwargs):
         try:
             if kwargs['arg1'] in self.cross_vars and len(kwargs) == 2:
                 return self.cross_vars[kwargs['arg1']]
-            else:
-                if self.vars[kwargs['arg1']][0] == 'var':
-                    return self.vars[kwargs['arg1']][1]
-                elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 3:
-                    try:
-                        return self.vars[kwargs['arg1']][1][int(kwargs['arg2'])]
-                    except IndexError as e:
-                        return self.default(e.__str__())
-                    except ValueError:
-                        return self.default('Can\'t get index \'%s\' of \'%s\'' % (kwargs['arg2'], kwargs['arg1']))
-                elif self.vars[kwargs['arg1']][0] == 'list':
-                    return ';'.join(self.vars[kwargs['arg1']][1])
+            elif self.vars[kwargs['arg1']][0] == 'var':
+                return self.vars[kwargs['arg1']][1]
+            elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 3:
+                try:
+                    return self.vars[kwargs['arg1']][1][int(kwargs['arg2'])]
+                except IndexError as e:
+                    return self.default(e.__str__())
+                except ValueError:
+                    return self.default('Can\'t get index \'%s\' of \'%s\'' % (kwargs['arg2'], kwargs['arg1']))
+            elif self.vars[kwargs['arg1']][0] == 'list':
+                return ';'.join(self.vars[kwargs['arg1']][1])
                     
         except KeyError as e:
-            return self.default('Couldn\'t find ' + e.__str__())
+            return self.default('Couldn\'t \'get\' %s' % e.__str__())
 
     def do_open(self, **kwargs):
         try:
@@ -204,20 +217,20 @@ ask - Prints the first argument and pauses the script until the user presses ent
                 os.startfile(self.cross_vars['standard_dir'] + kwargs['arg1'])
                 return ''
         except FileNotFoundError:
-            return self.default('Couldn\'t find ' + kwargs['arg1'])
+            return self.default('Couldn\'t find file \'%s\'' % kwargs['arg1'])
 
     def do_wait(self, **kwargs):
         try:
             time.sleep(float(kwargs['arg1']))
             return ''
         except ValueError:
-            return self-default('Can\'t wait \'%s\'' % kwargs['arg1'])
+            return self-default('Can\'t \'wait\' \'%s\' seconds' % kwargs['arg1'])
         except OverflowError:
-            return self.default('Can\'t wait that long')
+            return self.default('Can\'t \'wait\' for that long')
 
     def do_func(self, **kwargs):
         try:
-            if kwargs['arg1'] == 'create':
+            if kwargs['arg1'] == 'create' and len(kwargs) == 3:
                 if kwargs['arg2'] not in self.RESERVED_FUNC_NAMES:
                     try:
                         with open(self.SAVES_DIRECTORY + kwargs['arg2'] + '.cpy', 'w') as f:
@@ -229,13 +242,37 @@ ask - Prints the first argument and pauses the script until the user presses ent
                                 f.write(inst if inst != 'end\n' else '')
                         return ''
                     except PermissionError:
-                        return self.default('\'%s\' is an invalid name' % kwargs['arg2'])
+                        return self.default('\'%s\' is an invalid \'func\' name' % kwargs['arg2'])
                     except FileNotFoundError:
-                        return self.default('\'%s\' is an invalid name' % kwargs['arg2'])
+                        return self.default('\'%s\' is an invalid \'func\' name' % kwargs['arg2'])
                 else:
                     return self.default('Func name can\'t be \'%s\'' % kwargs['arg1'])
-            elif kwargs['arg1'] in self.funcs:
-                return self.handle_cpy_file(self.funcs[kwargs['arg1']])
+            elif kwargs['arg1'] == 'create' and len(kwargs) == 4:
+                if kwargs['arg2'] not in self.RESERVED_FUNC_NAMES:
+                    try:
+                        with open(self.SAVES_DIRECTORY + kwargs['arg2'] + '.cpy', 'w') as f:
+                            self.funcs[kwargs['arg2']] = self.SAVES_DIRECTORY + kwargs['arg2'] + '.cpy'
+                            self.funcs.save()
+                            f.write(kwargs['arg3'])
+                        return ''
+                    except PermissionError:
+                        return self.default('\'%s\' is an invalid \'func\' name' % kwargs['arg2'])
+                    except FileNotFoundError:
+                        return self.default('\'%s\' is an invalid \'func\' name' % kwargs['arg2'])
+                else:
+                    return self.default('Func name can\'t be \'%s\'' % kwargs['arg1'])
+            elif kwargs['arg1'] in self.funcs and len(kwargs) == 2:
+                self.running_func = True
+                result = self.handle_cpy_file(self.funcs[kwargs['arg1']])
+                self.running_func = False
+                return result
+            elif kwargs['arg1'] in self.funcs and len(kwargs) == 3:
+                self.vars['args'] = ['list', kwargs['arg2'].split(';')]
+                self.running_func = True
+                result = self.handle_cpy_file(self.funcs[kwargs['arg1']])
+                self.running_func = False
+                self.vars['args'] = ['var', '']
+                return result
             else:
                 return self.default('No func named \'%s\'' % kwargs['arg1'])
 
@@ -247,7 +284,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
         try:
             return str(int(float(kwargs['arg1'])))
         except ValueError:
-            return self.default('Can\'t int \'%s\'' % kwargs['arg1'])
+            return self.default('Cannot convert \'%s\' to an integer' % kwargs['arg1'])
     
     def do_ask(self, **kwargs):
         return input('' if len(kwargs) < 2 else kwargs['arg1'])
@@ -256,27 +293,44 @@ ask - Prints the first argument and pauses the script until the user presses ent
         try:
             for i in range(int(float(kwargs['arg1']))):
                 self.CURRENTLY_HANDELING = kwargs               
-                print(self.handle_inst(kwargs['arg2']))
+                result = self.handle_inst(kwargs['arg2'])
+                print(result, end='')
             return ''
         except KeyError as e:
             return self.default('Not enough \'repeat\' input')
         except ValueError:
             return self.default('Can\'t repeat \'%s\' times' % kwargs['arg1'])
 
+    def do_return(self, **kwargs):
+        try:
+            if self.SHELL and not self.running_func:
+                return self.default('Can\'t use \'return\' in shell')
+            else:
+                return ('RETURN', kwargs['arg1'])
+        except KeyError:
+            return ('RETURN', '')
+
     def handle_cpy_file(self, cpy_file):
         with open(cpy_file, 'r') as cpy:
             for inst in cpy.readlines():
                 if inst != '\n':
                     self.CURRENTLY_HANDELING = inst
-                    print(self.handle_inst(inst.strip('\n')))
+                    result = self.handle_inst(inst.strip('\n'))
+                    if type(result) == str:
+                        if result != '':
+                            print(result)
+                    elif type(result) == tuple:
+                        if result[0] == 'RETURN':
+                            return result[1]
+                    self.LINE_NUM += 1
+        self.LINE_NUM = 1
         return ''
     
     def validate_cmd(self, cmd):
         for tup in self.COMMANDS:
             if tup[0] == cmd:
                 return True
-        else:
-            return False
+        return False
 
     def find_embed(self, inst):
         inst += ' '
@@ -336,7 +390,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
                 for tup in reversed(embed):
                     new_inst = tup[0][1:len(tup[0])-1] if tup[0].startswith('<') and tup[0].endswith('>') else tup[0][1:] if tup[0].startswith('<') else tup[0][:len(tup[0])-1]
                     self.CURRENTLY_HANDELING = new_inst
-                    selfcall_outcome = self.handle_inst(new_inst)
+                    selfcall_outcome = str(self.handle_inst(new_inst))
                     if not selfcall_outcome.startswith('Error'):
                         parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
                         parsed_inst['arg%s' % i][tup[1]: tup[2]] = list(str(selfcall_outcome))
@@ -355,15 +409,18 @@ ask - Prints the first argument and pauses the script until the user presses ent
         while True:
             instruction = input(self.COMMAND_PROMPT)
             if instruction:
-                cmd_outcome = self.handle_inst(instruction)
-                if cmd_outcome:
+                cmd_outcome = str(self.handle_inst(instruction))
+                if cmd_outcome.startswith('Error') and not self.SHELL:
+                    print(cmd_outcome)
+                    input('\n\nPress enter to exit ')
+                else:
                     print(cmd_outcome)
 
 try:
     os.system('cls')
-    handler = Handler(sys.argv[1])
+    handler = Handler(sys.argv[1], False)
     handler.handle_cpy_file(sys.argv[1])
     input()
 except IndexError:
-    console = Handler(sys.argv[0])
+    console = Handler(sys.argv[0], True)
     console.main()
