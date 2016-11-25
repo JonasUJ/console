@@ -71,18 +71,19 @@ ask - Prints the first argument and pauses the script until the user presses ent
             'set': (self.do_set, True, True, True), 
             'get': (self.do_get, True, True), 
             'open': (self.do_open, True),
-            'func': (self.do_func, True, True),
+            'func': (self.do_func, True, True, False),
             'wait': (self.do_wait, True),
             'int': (self.do_int, True),
             'ask': (self.do_ask, True),
             'repeat': (self.do_repeat, True, False),
-            'return': (self.do_return, True)
+            'return': (self.do_return, True),
+            'use': (self.do_use, True)
             }
         if not os.path.exists(self.SAVES_DIRECTORY + 'save.txt'):
             with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
                 pass
         self.cross_vars = dictdb(self.SAVES_DIRECTORY + 'save.txt')
-        self.cross_vars_names = ['standard_dir']
+        self.cross_vars_names = ['standard_dir', 'module_dir']
         for var_name in self.cross_vars_names:
             if var_name not in self.cross_vars:
                 self.cross_vars[var_name] = ''
@@ -126,7 +127,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
         except ZeroDivisionError as e:
             return self.default(e)
         except SyntaxError:
-            return self.default('Invalid cal syntax')
+            return self.default('Invalid \'cal\' syntax')
         except TypeError:
             return kwargs['arg1']
         except KeyError:
@@ -310,6 +311,22 @@ ask - Prints the first argument and pauses the script until the user presses ent
         except KeyError:
             return ('RETURN', '')
 
+    def do_use(self, **kwargs):
+        try:
+            self.handle_cpy_file(self.cross_vars['module_dir'] + kwargs['arg1'] + '.cpy')
+            return ''
+        except PermissionError:
+            try:
+                self.handle_cpy_file(self.cross_vars['standard_dir'] + kwargs['arg1'] + '.cpy')
+                return ''
+            except PermissionError:
+                try:
+                    self.handle_cpy_file(kwargs['arg1'])
+                    return ''
+                except PermissionError:
+                    return self.default('Couldn\'t use \'%s\'' % kwargs['arg1'])       
+
+
     def handle_cpy_file(self, cpy_file):
         with open(cpy_file, 'r') as cpy:
             for inst in cpy.readlines():
@@ -416,8 +433,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
                 else:
                     print(cmd_outcome)
 
+os.system('cls')
 try:
-    os.system('cls')
     handler = Handler(sys.argv[1], False)
     handler.handle_cpy_file(sys.argv[1])
     input()
