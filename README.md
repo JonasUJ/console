@@ -1,4 +1,4 @@
-# console
+# console (OUTDATED)
 A tool thats shitty and buggy, but i'm still creating it.
 
 command syntax = `CMD ARG1 "ARG 2" "ARG \"3\""`
