@@ -1,4 +1,4 @@
-#TODO additions: bools, conditions, if/else, imports, 
+#TODO additions: if/else, func remove, remove file
 #TODO checks: 
 
 import copy
@@ -14,6 +14,8 @@ class Handler:
 
     def __init__(self, path, shell):
         self.HELP = '''
+MORE COMING WHEN I HAVE NOTHING BETTER TO DO
+
 help - Shows this text
 
 exit or quit - Terminates the script
@@ -52,7 +54,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
         self.DIRECTORY_OF_FILE = path.rstrip(self.NAME_OF_FILE)
         self.PATH_PATTERN = re.compile(r'^[a-zA-Z]:/(?:[^\\/:*?"<>|\r\n]+/)*[^\\/:*?"<>|\r\n]*$')
         self.COMMAND_PROMPT = "\n:: "
-        self.RESERVED_NAMES = ['args']
+        self.RESERVED_NAMES = ['args', 'TRUE', 'FALSE']
         self.RESERVED_FUNC_NAMES = ['create']
         self.SAVES_DIRECTORY = self.DIRECTORY_OF_FILE + '/' + self.NAME_OF_FILE + '.saves/'
         if not os.path.exists(self.SAVES_DIRECTORY):
@@ -77,7 +79,9 @@ ask - Prints the first argument and pauses the script until the user presses ent
             'ask': (self.do_ask, True),
             'repeat': (self.do_repeat, True, False),
             'return': (self.do_return, True),
-            'use': (self.do_use, True)
+            'use': (self.do_use, True),
+            'cond': (self.do_cond, True, False, True),
+            'if': (self.do_if, True, False, False, False)
             }
         if not os.path.exists(self.SAVES_DIRECTORY + 'save.txt'):
             with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
@@ -91,6 +95,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
         for var_name in self.RESERVED_NAMES:
             if var_name not in self.vars:
                 self.vars[var_name] = ['var', '']
+        self.vars['TRUE'], self.vars['FALSE'] = ['bool', 'TRUE'], ['bool', 'FALSE']
         if not os.path.exists(self.SAVES_DIRECTORY + 'funcs.txt'):
             with open(self.SAVES_DIRECTORY + 'funcs.txt', 'w'):
                 pass
@@ -169,6 +174,9 @@ ask - Prints the first argument and pauses the script until the user presses ent
                 elif kwargs['arg1'] and ';' in kwargs['arg2'] and len(kwargs) == 3:
                     self.vars[kwargs['arg1']] = ['list', kwargs['arg2'].split(';')]
                     return ''
+                elif kwargs['arg2'] in ['TRUE', 'FALSE']:
+                    self.vars[kwargs['arg1']] = ['bool', kwargs['arg2']]
+                    return ''
                 elif kwargs['arg1'] and len(kwargs) == 3:
                     self.vars[kwargs['arg1']] = ['var', kwargs['arg2']]
                     return ''  
@@ -194,7 +202,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
         try:
             if kwargs['arg1'] in self.cross_vars and len(kwargs) == 2:
                 return self.cross_vars[kwargs['arg1']]
-            elif self.vars[kwargs['arg1']][0] == 'var':
+            elif self.vars[kwargs['arg1']][0] in ['var', 'bool']:
                 return self.vars[kwargs['arg1']][1]
             elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 3:
                 try:
@@ -324,7 +332,47 @@ ask - Prints the first argument and pauses the script until the user presses ent
                     self.handle_cpy_file(kwargs['arg1'])
                     return ''
                 except PermissionError:
-                    return self.default('Couldn\'t use \'%s\'' % kwargs['arg1'])       
+                    return self.default('Couldn\'t use \'%s\'' % kwargs['arg1'])
+
+    def do_cond(self, **kwargs):
+        try:
+            if kwargs['arg2'] == '==':
+                if kwargs['arg1'] == kwargs['arg3']: return 'TRUE'
+                else: return 'FALSE'
+            elif kwargs['arg2'] == '<=':
+                if kwargs['arg1'] <= kwargs['arg3']: return 'TRUE'
+                else: return 'FALSE'
+            elif kwargs['arg2'] == '>=':
+                if kwargs['arg1'] >= kwargs['arg3']: return 'TRUE'
+                else: return 'FALSE'
+            elif kwargs['arg2'] == '!=':
+                if kwargs['arg1'] != kwargs['arg3']: return 'TRUE'
+                else: return 'FALSE'
+            elif kwargs['arg2'] == '<':
+                if kwargs['arg1'] < kwargs['arg3']: return 'TRUE'
+                else: return 'FALSE'
+            elif kwargs['arg2'] == '>':
+                if kwargs['arg1'] > kwargs['arg3']: return 'TRUE'
+                else: return 'FALSE'
+        except KeyError:
+            return self.default('Not enough input to \'cond\'')
+
+    def do_if(self, **kwargs):
+        try:
+            if kwargs['arg1'] == 'TRUE':
+                return self.handle_inst(kwargs['arg2'])
+            elif kwargs['arg1'] == 'FALSE':
+                if len(kwargs) >= 4:
+                    if kwargs['arg3'] == 'else':
+                        return self.handle_inst(kwargs['arg4'])
+                    else:
+                        return self.default('Invalid keyword \'%s\'' % kwargs['arg3'])
+                else:
+                    return ''
+            else:
+                return self.default('Can\'t do "if \'%s\'"' % kwargs['arg1'])
+        except KeyError:
+            return self.default('Not enough input to \'if\'')
 
 
     def handle_cpy_file(self, cpy_file):
@@ -380,25 +428,36 @@ ask - Prints the first argument and pauses the script until the user presses ent
         token = ''
         embeds = quote = 0
         cur_arg = 1
-        for i in range(len(parse_inst)):
-            if result['cmd'] == '' and parse_inst[i] == ' ':
-                result['cmd'] = token
-                token = ''
-            elif parse_inst[i] == '<': embeds += 1
-            elif parse_inst[i] == '>': embeds -= 1
-            elif parse_inst[i] == '"' and parse_inst[i - 1] != '\\': quote = 1 if quote == 0 else 0
-            elif parse_inst[i] == ' ' and quote == 0 and embeds == 0:
-                token = token.lstrip(' ').replace(r'\"', '"')
-                token = token[1:len(token)-1] if token.startswith('"') and token.endswith('"') else token
-                if token:
-                    result['arg%s' % cur_arg] = token
-                cur_arg += 1
-                token = ''
-            token += parse_inst[i]
-        return result      
+        try:
+            for i in range(len(parse_inst)):
+                if result['cmd'] == '' and parse_inst[i] == ' ':
+                    result['cmd'] = token
+                    token = ''
+                elif parse_inst[i] == '<' and result['cmd'] != '':
+                    if self.COMMANDS[result['cmd']][len(result)]:
+                        embeds += 1
+                elif parse_inst[i] == '>' and result['cmd'] != '':
+                    if self.COMMANDS[result['cmd']][len(result)]:
+                        embeds -= 1
+                elif parse_inst[i] == '"' and parse_inst[i - 1] != '\\': quote = 1 if quote == 0 else 0
+                elif parse_inst[i] == ' ' and quote == 0 and embeds == 0:
+                    token = token.lstrip(' ').replace(r'\"', '"')
+                    token = token[1:len(token)-1] if token.startswith('"') and token.endswith('"') else token
+                    if token:
+                        result['arg%s' % cur_arg] = token
+                    cur_arg += 1
+                    token = ''
+                token += parse_inst[i]
+            return result
+        except KeyError:
+            return self.default('Invalid command \'%s\'' % result['cmd'])      
 
     def handle_inst(self, inst):
         parsed_inst = self.parse_inst(inst)
+        try:
+            if parsed_inst.startswith('Error'):
+                return parsed_inst
+        except AttributeError: pass
         if self.validate_cmd(parsed_inst['cmd']):
             return self.default('Invalid command \'%s\'' % parsed_inst['cmd'])
         for i in range(1, len(parsed_inst.values())):
