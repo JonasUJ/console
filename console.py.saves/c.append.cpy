@@ -1,1 +1,0 @@
-set <get args 0> <len <get <get args 0>>> <get <get args 0> <int <cal <len <get <get args 0>>>-1>>>;<get args 1>
