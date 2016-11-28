@@ -1,4 +1,4 @@
-#TODO additions: if/else, func remove, remove file
+#TODO additions: func remove, remove file, len command, 
 #TODO checks: 
 
 import copy
@@ -81,7 +81,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
             'return': (self.do_return, True),
             'use': (self.do_use, True),
             'cond': (self.do_cond, True, False, True),
-            'if': (self.do_if, True, False, False, False)
+            'if': (self.do_if, True, False, False, False),
+            'len': (self.do_len, True)
             }
         if not os.path.exists(self.SAVES_DIRECTORY + 'save.txt'):
             with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
@@ -171,18 +172,21 @@ ask - Prints the first argument and pauses the script until the user presses ent
                     self.cross_vars[kwargs['arg1']] = kwargs['arg2']
                     self.cross_vars.save()
                     return ''
-                elif kwargs['arg1'] and ';' in kwargs['arg2'] and len(kwargs) == 3:
+                elif ';' in kwargs['arg2'] and len(kwargs) == 3:
                     self.vars[kwargs['arg1']] = ['list', kwargs['arg2'].split(';')]
                     return ''
                 elif kwargs['arg2'] in ['TRUE', 'FALSE']:
                     self.vars[kwargs['arg1']] = ['bool', kwargs['arg2']]
                     return ''
-                elif kwargs['arg1'] and len(kwargs) == 3:
+                elif len(kwargs) == 3:
                     self.vars[kwargs['arg1']] = ['var', kwargs['arg2']]
                     return ''  
                 elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) == 4:
                     try:
-                        self.vars[kwargs['arg1']][1][int(kwargs['arg2'])] = kwargs['arg3']
+                        if ';' in kwargs['arg3']:
+                            self.vars[kwargs['arg1']][1][int(kwargs['arg2']):int(kwargs['arg2'])+1] = kwargs['arg3'].split(';')
+                        else:
+                            self.vars[kwargs['arg1']][1][int(kwargs['arg2'])] = kwargs['arg3']
                         return ''
                     except IndexError as e:
                         return self.default(e.__str__())  
@@ -202,9 +206,9 @@ ask - Prints the first argument and pauses the script until the user presses ent
         try:
             if kwargs['arg1'] in self.cross_vars and len(kwargs) == 2:
                 return self.cross_vars[kwargs['arg1']]
-            elif self.vars[kwargs['arg1']][0] in ['var', 'bool']:
+            elif self.vars[kwargs['arg1']][0] in ['var', 'bool'] and len(kwargs) == 2:
                 return self.vars[kwargs['arg1']][1]
-            elif self.vars[kwargs['arg1']][0] == 'list' and len(kwargs) >= 3:
+            elif self.vars[kwargs['arg1']][0] in ['list', 'var'] and len(kwargs) >= 3:
                 try:
                     return self.vars[kwargs['arg1']][1][int(kwargs['arg2'])]
                 except IndexError as e:
@@ -374,6 +378,15 @@ ask - Prints the first argument and pauses the script until the user presses ent
         except KeyError:
             return self.default('Not enough input to \'if\'')
 
+    def do_len(self, **kwargs):
+        try:
+            if ';' in kwargs['arg1']:
+                return str(len(kwargs['arg1'].split(';')))
+            else:
+                return str(len(kwargs['arg1']))
+        except KeyError:
+            return self.default('Not enough input to \'len\'')
+
 
     def handle_cpy_file(self, cpy_file):
         with open(cpy_file, 'r') as cpy:
@@ -385,6 +398,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
                         if result != '':
                             print(result)
                     elif type(result) == tuple:
+
                         if result[0] == 'RETURN':
                             return result[1]
                     self.LINE_NUM += 1
@@ -453,6 +467,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
             return self.default('Invalid command \'%s\'' % result['cmd'])      
 
     def handle_inst(self, inst):
+        print(inst)
         parsed_inst = self.parse_inst(inst)
         try:
             if parsed_inst.startswith('Error'):
@@ -477,7 +492,9 @@ ask - Prints the first argument and pauses the script until the user presses ent
             self.CURRENTLY_HANDELING = ''
             for i in range(len(parsed_inst)):
                 self.CURRENTLY_HANDELING += ' ' + parsed_inst['arg%s' % i] if i else parsed_inst['cmd']
-            return self.COMMANDS[parsed_inst['cmd']][0](**parsed_inst)
+            result = self.COMMANDS[parsed_inst['cmd']][0](**parsed_inst)
+            print(result, self.CURRENTLY_HANDELING)
+            return result
         except KeyError as e:
             return self.default('Invalid command ' + e.__str__())
 
@@ -491,6 +508,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
                     input('\n\nPress enter to exit ')
                 else:
                     print(cmd_outcome)
+                    print(self.vars)
 
 os.system('cls')
 try:
