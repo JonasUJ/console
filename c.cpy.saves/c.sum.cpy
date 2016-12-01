@@ -1,0 +1,1 @@
+return <get c.sum.result><repeat <len <get args>> "pass <func c.incr c.sum.result;<get args <get c.sum.iter>>> <func c.incr c.sum.iter;1>"><set c.sum.result 0><set c.sum.iter 0>

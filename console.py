@@ -1,4 +1,4 @@
-#TODO additions: func remove, remove file, len command, 
+#TODO additions: func remove, remove file, 
 #TODO checks: 
 
 import copy
@@ -49,11 +49,12 @@ e.g "int 2.0" will return "2" and "int 2.9563" will return "2"
 
 ask - Prints the first argument and pauses the script until the user presses enter. Return whatever the user wrote
         '''
+        self.DEBUG = True
         self.SHELL = shell
         self.NAME_OF_FILE = os.path.basename(path)
         self.DIRECTORY_OF_FILE = path.rstrip(self.NAME_OF_FILE)
         self.PATH_PATTERN = re.compile(r'^[a-zA-Z]:/(?:[^\\/:*?"<>|\r\n]+/)*[^\\/:*?"<>|\r\n]*$')
-        self.COMMAND_PROMPT = "\n:: "
+        self.COMMAND_PROMPT = ":: "
         self.RESERVED_NAMES = ['args', 'TRUE', 'FALSE']
         self.RESERVED_FUNC_NAMES = ['create']
         self.SAVES_DIRECTORY = self.DIRECTORY_OF_FILE + '/' + self.NAME_OF_FILE + '.saves/'
@@ -61,7 +62,6 @@ ask - Prints the first argument and pauses the script until the user presses ent
             os.makedirs(self.SAVES_DIRECTORY)
         self.CURRENTLY_HANDELING = ''
         self.LINE_NUM = 1
-        self.running_func = False
         self.COMMANDS = {
             'exit': (self.do_exit,), 
             'quit': (self.do_exit,), 
@@ -82,7 +82,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
             'use': (self.do_use, True),
             'cond': (self.do_cond, True, False, True),
             'if': (self.do_if, True, False, False, False),
-            'len': (self.do_len, True)
+            'len': (self.do_len, True),
+            'pass': (self.do_pass, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True, True)
             }
         if not os.path.exists(self.SAVES_DIRECTORY + 'save.txt'):
             with open(self.SAVES_DIRECTORY + 'save.txt', 'w'):
@@ -104,8 +105,10 @@ ask - Prints the first argument and pauses the script until the user presses ent
 
     def default(self, error):
         to_return = 'Error occurred on line %s\n\'%s\'\n%s' % (self.LINE_NUM, self.CURRENTLY_HANDELING.strip(' '), str(error))
+        if self.DEBUG: print('default gets error:', error)
         self.CURRENTLY_HANDELING = ''
-        return to_return
+        self.LINE_NUM = 1
+        return ('ERROR', to_return)
 
     def do_help(self, **kwargs):
         return self.HELP
@@ -122,7 +125,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
         except KeyError:
             return self.default('Not enough input to \'say\'')
         except ValueError:
-            return self.default('Can\'t say that')
+            return self.default('Can\'t say \'%s\'' % kwargs['arg1'])
  
     def do_cal(self, **kwargs):
         try:
@@ -275,15 +278,11 @@ ask - Prints the first argument and pauses the script until the user presses ent
                 else:
                     return self.default('Func name can\'t be \'%s\'' % kwargs['arg1'])
             elif kwargs['arg1'] in self.funcs and len(kwargs) == 2:
-                self.running_func = True
                 result = self.handle_cpy_file(self.funcs[kwargs['arg1']])
-                self.running_func = False
                 return result
             elif kwargs['arg1'] in self.funcs and len(kwargs) == 3:
                 self.vars['args'] = ['list', kwargs['arg2'].split(';')]
-                self.running_func = True
                 result = self.handle_cpy_file(self.funcs[kwargs['arg1']])
-                self.running_func = False
                 self.vars['args'] = ['var', '']
                 return result
             else:
@@ -316,25 +315,20 @@ ask - Prints the first argument and pauses the script until the user presses ent
 
     def do_return(self, **kwargs):
         try:
-            if self.SHELL and not self.running_func:
-                return self.default('Can\'t use \'return\' in shell')
-            else:
-                return ('RETURN', kwargs['arg1'])
+            return ('RETURN', kwargs['arg1'])
         except KeyError:
             return ('RETURN', '')
 
     def do_use(self, **kwargs):
         try:
-            self.handle_cpy_file(self.cross_vars['module_dir'] + kwargs['arg1'] + '.cpy')
-            return ''
+            return self.handle_cpy_file(self.cross_vars['module_dir'] + kwargs['arg1'] + '.cpy')
         except PermissionError:
             try:
-                self.handle_cpy_file(self.cross_vars['standard_dir'] + kwargs['arg1'] + '.cpy')
-                return ''
+                return self.handle_cpy_file(self.cross_vars['standard_dir'] + kwargs['arg1'] + '.cpy')
             except PermissionError:
                 try:
-                    self.handle_cpy_file(kwargs['arg1'])
-                    return ''
+                    return self.handle_cpy_file(kwargs['arg1'])
+
                 except PermissionError:
                     return self.default('Couldn\'t use \'%s\'' % kwargs['arg1'])
 
@@ -387,6 +381,8 @@ ask - Prints the first argument and pauses the script until the user presses ent
         except KeyError:
             return self.default('Not enough input to \'len\'')
 
+    def do_pass(self, **kwargs):
+        return ''
 
     def handle_cpy_file(self, cpy_file):
         with open(cpy_file, 'r') as cpy:
@@ -398,17 +394,16 @@ ask - Prints the first argument and pauses the script until the user presses ent
                         if result != '':
                             print(result)
                     elif type(result) == tuple:
-
                         if result[0] == 'RETURN':
                             return result[1]
-                    self.LINE_NUM += 1
+                        elif result[0] == 'ERROR':
+                            return result[1]
+                self.LINE_NUM += 1
         self.LINE_NUM = 1
         return ''
     
     def validate_cmd(self, cmd):
-        for tup in self.COMMANDS:
-            if tup[0] == cmd:
-                return True
+        if cmd in self.COMMANDS: return True
         return False
 
     def find_embed(self, inst):
@@ -467,22 +462,32 @@ ask - Prints the first argument and pauses the script until the user presses ent
             return self.default('Invalid command \'%s\'' % result['cmd'])      
 
     def handle_inst(self, inst):
-        print(inst)
+        self.CURRENTLY_HANDELING = inst
+        if self.DEBUG: print('gets', inst)
         parsed_inst = self.parse_inst(inst)
-        try:
-            if parsed_inst.startswith('Error'):
-                return parsed_inst
-        except AttributeError: pass
-        if self.validate_cmd(parsed_inst['cmd']):
+        if self.DEBUG: print('parsed', parsed_inst)
+
+        if type(parsed_inst) == tuple:
+            if self.DEBUG: print('Incountered error')
+            return parsed_inst
+
+        if self.DEBUG: print('type parsed_inst', type(parsed_inst))
+
+        if not self.validate_cmd(parsed_inst['cmd']):
+            if self.DEBUG: print('Incountered error')
             return self.default('Invalid command \'%s\'' % parsed_inst['cmd'])
+
         for i in range(1, len(parsed_inst.values())):
+
             if '<' in parsed_inst['arg%s' % i] and self.COMMANDS[parsed_inst['cmd']][i]:
                 embed = self.find_embed(parsed_inst['arg%s' % i])
+
                 for tup in reversed(embed):
                     new_inst = tup[0][1:len(tup[0])-1] if tup[0].startswith('<') and tup[0].endswith('>') else tup[0][1:] if tup[0].startswith('<') else tup[0][:len(tup[0])-1]
                     self.CURRENTLY_HANDELING = new_inst
-                    selfcall_outcome = str(self.handle_inst(new_inst))
-                    if not selfcall_outcome.startswith('Error'):
+                    selfcall_outcome = self.handle_inst(new_inst)
+
+                    if not type(selfcall_outcome) == tuple:
                         parsed_inst['arg%s' % i] = list(parsed_inst['arg%s' % i])
                         parsed_inst['arg%s' % i][tup[1]: tup[2]] = list(str(selfcall_outcome))
                         parsed_inst['arg%s' % i] = ''.join(parsed_inst['arg%s' % i])
@@ -493,7 +498,7 @@ ask - Prints the first argument and pauses the script until the user presses ent
             for i in range(len(parsed_inst)):
                 self.CURRENTLY_HANDELING += ' ' + parsed_inst['arg%s' % i] if i else parsed_inst['cmd']
             result = self.COMMANDS[parsed_inst['cmd']][0](**parsed_inst)
-            print(result, self.CURRENTLY_HANDELING)
+            if self.DEBUG: print('sends', result, 'CURRENTLY HANDELING', self.CURRENTLY_HANDELING)
             return result
         except KeyError as e:
             return self.default('Invalid command ' + e.__str__())
@@ -501,20 +506,24 @@ ask - Prints the first argument and pauses the script until the user presses ent
     def main(self):
         while True:
             instruction = input(self.COMMAND_PROMPT)
+            self.LINE_NUM = 1
             if instruction:
-                cmd_outcome = str(self.handle_inst(instruction))
-                if cmd_outcome.startswith('Error') and not self.SHELL:
-                    print(cmd_outcome)
+                cmd_outcome = self.handle_inst(instruction)
+                if type(cmd_outcome) == tuple and not self.SHELL:
+                    print(cmd_outcome[1])
                     input('\n\nPress enter to exit ')
+                elif type(cmd_outcome) == tuple:
+                    print(cmd_outcome[1])
                 else:
                     print(cmd_outcome)
-                    print(self.vars)
+                    if self.DEBUG: print(self.vars)
 
-os.system('cls')
-try:
-    handler = Handler(sys.argv[1], False)
-    handler.handle_cpy_file(sys.argv[1])
-    input()
-except IndexError:
-    console = Handler(sys.argv[0], True)
-    console.main()
+if __name__ == '__main__':
+    os.system('cls')
+    try:
+        handler = Handler(sys.argv[1], False)
+        print(handler.handle_cpy_file(sys.argv[1]))
+        input('\n')
+    except IndexError:
+        console = Handler(sys.argv[0], True)
+        console.main()

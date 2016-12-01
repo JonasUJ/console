@@ -1,2 +1,3 @@
 func create c.incr "set <get args 0> <cal <get args 1>+<get <get args 0>>>"
 func create c.append "set <get args 0> <int <cal <len <get <get args 0>>>-1>> <get <get args 0> <int <cal <len <get <get args 0>>>-1>>>;<get args 1>"
+func create c.sum "return <get c.sum.result><repeat <len <get args>> \"pass <func c.incr c.sum.result;<get args <get c.sum.iter>>> <func c.incr c.sum.iter;1>\"><set c.sum.result 0><set c.sum.iter 0>"
